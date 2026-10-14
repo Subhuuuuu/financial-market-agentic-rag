@@ -5,10 +5,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 
 from src.config import EMBEDDING_MODEL
-from src.ingestion.loader import (
-    load_financial_documents,
-    split_financial_documents,
-)
+from src.ingestion.loader import load_rag_documents
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 INDEX_PATH = PROJECT_ROOT / "data" / "index"
@@ -23,11 +20,16 @@ def create_embeddings() -> HuggingFaceEmbeddings:
 
 
 def build_vector_store() -> FAISS:
-    documents = load_financial_documents()
-    chunks = split_financial_documents(documents)
+    documents = load_rag_documents()
+
+    if not documents:
+        raise ValueError("No documents available for the RAG index.")
 
     embeddings = create_embeddings()
-    vector_store = FAISS.from_documents(chunks, embeddings)
+    vector_store = FAISS.from_documents(
+        documents,
+        embeddings,
+    )
 
     INDEX_PATH.mkdir(parents=True, exist_ok=True)
     vector_store.save_local(str(INDEX_PATH))
@@ -38,7 +40,8 @@ def build_vector_store() -> FAISS:
 def load_vector_store() -> FAISS:
     if not (INDEX_PATH / "index.faiss").exists():
         raise FileNotFoundError(
-            "FAISS index not found. Run build_vector_store() first."
+            "FAISS index not found. Build it with "
+            "'python -m src.retrieval.vector_store --build'."
         )
 
     embeddings = create_embeddings()
@@ -51,6 +54,13 @@ def load_vector_store() -> FAISS:
 
 
 if __name__ == "__main__":
-    vector_store = load_vector_store()
-    print("FAISS index loaded successfully!")
-    print("Total vectors:", vector_store.index.ntotal)
+    import sys
+
+    if "--build" in sys.argv:
+        store = build_vector_store()
+        print("RAG index built successfully.")
+    else:
+        store = load_vector_store()
+        print("RAG index loaded successfully.")
+
+    print("Total indexed documents:", store.index.ntotal)

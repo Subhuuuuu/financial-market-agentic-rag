@@ -1,32 +1,34 @@
 
+from src.agents.analysis import _relevant_sentences
+
+
 def risk_assessment_agent(state):
-    query = state.get("query", "").lower()
-    context = state.get("retrieved_context", "").lower()
+    query = state.get("query", "").strip()
+    context = state.get("retrieved_context", "").strip()
 
-    risks = []
+    if not context:
+        return {
+            "agent_answer": (
+                "Risk assessment could not be completed because "
+                "the RAG system did not retrieve supporting evidence."
+            )
+        }
 
-    if "debt" in query or "leverage" in context:
-        risks.append("High debt may increase financial risk.")
+    findings = _relevant_sentences(query, context, limit=5)
 
-    if "volatility" in query or "market risk" in context:
-        risks.append("Market volatility may cause investment losses.")
+    if not findings:
+        findings = [
+            line.strip()
+            for line in context.splitlines()
+            if line.strip() and not line.strip().startswith("Source:")
+        ][:3]
 
-    if "concentration" in context or "concentration" in query:
-        risks.append("Concentration in a few assets increases exposure.")
-
-    if not risks:
-        risks.append(
-            "Insufficient information for a detailed risk assessment."
-        )
-
-    answer = "Risk Assessment:\n"
-
-    for risk in risks:
-        answer += "- " + risk + "\n"
-
+    answer = "Risk Assessment Based on Retrieved Evidence\n\n"
+    answer += "\n".join(f"- {finding}" for finding in findings)
     answer += (
-        "\nThis assessment is based on the available text. "
-        "It does not use live market data."
+        "\n\nLimitations: This assessment reflects the retrieved "
+        "dataset and knowledge base. It is not a personalized "
+        "investment recommendation and does not use live market data."
     )
 
     return {"agent_answer": answer}
@@ -34,11 +36,10 @@ def risk_assessment_agent(state):
 
 if __name__ == "__main__":
     result = risk_assessment_agent({
-        "query": "Assess debt and market risk",
+        "query": "How can high debt increase financial risk?",
         "retrieved_context": (
-            "Leverage can increase financial risk. "
-            "Market risk refers to losses caused by market movements."
-        )
+            "Higher leverage can increase financial risk, "
+            "particularly when earnings or cash flows decline."
+        ),
     })
-
     print(result["agent_answer"])
